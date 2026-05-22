@@ -14,7 +14,10 @@ const state = {
   countdownTimer: null,
   nextRoundTimer: null,
   busy: false,
+  lastResultKey: "",
 };
+
+const resultPauseMs = 1200;
 
 const elements = {
   connectionStatus: document.querySelector("#connectionStatus"),
@@ -77,8 +80,8 @@ function renderRoundDots(game) {
 
 function render(game) {
   elements.connectionStatus.textContent = game.connected
-    ? "Connected"
-    : "Not connected";
+    ? "Arduino connected"
+    : "Arduino offline";
   elements.connectionStatus.classList.toggle("connected", game.connected);
   elements.userWins.textContent = game.userWins;
   elements.webWins.textContent = game.webWins;
@@ -111,10 +114,28 @@ function render(game) {
   elements.playButton.disabled = true;
 }
 
+function resultKeyFor(game) {
+  return [
+    game.roundIndex,
+    game.userWins,
+    game.webWins,
+    game.ties,
+    game.lastResult,
+    game.lastUserChoice,
+    game.lastWebChoice,
+    game.waitingForArduino,
+    game.gameOver,
+  ].join("|");
+}
+
 async function runCountdown(game) {
   state.busy = true;
   elements.playButton.disabled = true;
   elements.prompt.textContent = "Turn around and face the Arduino.";
+  choiceMarkup(null);
+
+  const readyState = await api("/api/round-ready", { method: "POST" });
+  render(readyState);
   choiceMarkup(null);
 
   for (const value of ["3", "2", "1"]) {
@@ -122,7 +143,6 @@ async function runCountdown(game) {
     await new Promise((resolve) => setTimeout(resolve, 760));
   }
 
-  const readyState = await api("/api/round-ready", { method: "POST" });
   state.busy = false;
   render(readyState);
   elements.countdown.textContent = "Shoot";
@@ -169,24 +189,25 @@ async function sendSimulatedChoice(choice) {
       body: JSON.stringify({ choice }),
     });
 
+    state.lastResultKey = resultKeyFor(game);
     render(game);
     choiceMarkup(game.lastWebChoice || game.currentWebChoice);
 
     if (!game.gameOver && game.lastResult === "tie") {
       state.busy = false;
-      elements.prompt.textContent = "Tie. Same choice again in 3 seconds.";
+      elements.prompt.textContent = "Tie. Same choice again.";
       state.nextRoundTimer = setTimeout(() => {
         nextRound();
-      }, 3000);
+      }, resultPauseMs);
       return;
     }
 
     state.busy = false;
     if (!game.gameOver) {
-      elements.prompt.textContent = "Next round starts in 3 seconds.";
+      elements.prompt.textContent = "Next round starting.";
       state.nextRoundTimer = setTimeout(() => {
         nextRound();
-      }, 3000);
+      }, resultPauseMs);
       return;
     }
 
@@ -197,9 +218,50 @@ async function sendSimulatedChoice(choice) {
   }
 }
 
+async function pollState() {
+  if (state.busy) {
+    return;
+  }
+
+  try {
+    const game = await api("/api/state");
+    const key = resultKeyFor(game);
+
+    if (key !== state.lastResultKey) {
+      state.lastResultKey = key;
+      render(game);
+      if (game.lastWebChoice && !game.waitingForArduino) {
+        choiceMarkup(game.lastWebChoice);
+      }
+
+      if (
+        game.started &&
+        !game.gameOver &&
+        !game.waitingForArduino &&
+        game.lastResult
+      ) {
+        elements.prompt.textContent = "Next round starting.";
+        clearNextRoundTimer();
+        state.nextRoundTimer = setTimeout(() => {
+          nextRound();
+        }, resultPauseMs);
+      }
+    }
+  } catch (error) {
+    // Keep the UI usable if the server is briefly unavailable.
+  }
+}
+
 elements.playButton.addEventListener("click", nextRound);
 elements.simulateButtons.forEach((button) => {
   button.addEventListener("click", () => sendSimulatedChoice(button.dataset.choice));
 });
 
-api("/api/state").then(render).catch(() => {});
+api("/api/state")
+  .then((game) => {
+    state.lastResultKey = resultKeyFor(game);
+    render(game);
+  })
+  .catch(() => {});
+
+setInterval(pollState, 500);

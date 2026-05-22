@@ -2,18 +2,35 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
+let SerialPort;
+let ReadlineParser;
+
+try {
+  ({ SerialPort, ReadlineParser } = require("serialport"));
+} catch (error) {
+  SerialPort = null;
+  ReadlineParser = null;
+}
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
 const PUBLIC_DIR = path.join(__dirname, "public");
 
 const choices = ["rock", "scissors", "paper", "rock", "scissors"];
 const winsNeeded = 3;
+const serialBaudRate = 921600;
+const serialBootDelayMs = 2500;
+
+let serialPort = null;
+let serialPath = process.env.ARDUINO_PORT || null;
 
 let state = createInitialState();
 
 function createInitialState() {
   return {
     connected: false,
+    serialConnected: false,
+    serialPath,
     started: false,
     gameOver: false,
     roundIndex: 0,
@@ -32,10 +49,18 @@ function createInitialState() {
 function publicState() {
   return {
     ...state,
+    serialConnected: Boolean(serialPort && serialPort.isOpen),
+    serialPath,
     choices,
     winsNeeded,
     totalRounds: choices.length,
   };
+}
+
+function updateSerialConnection(isConnected) {
+  state.connected = isConnected;
+  state.serialConnected = isConnected;
+  state.serialPath = serialPath;
 }
 
 function normalizeChoice(choice) {
@@ -100,6 +125,131 @@ function advanceGameWithChoice(userChoice) {
   }
 
   return { ok: true, state: publicState() };
+}
+
+async function findArduinoPortPath() {
+  if (!SerialPort) {
+    return null;
+  }
+
+  if (serialPath) {
+    return serialPath;
+  }
+
+  const ports = await SerialPort.list();
+  const likelyPort = ports.find((port) => {
+    const text = [
+      port.path,
+      port.manufacturer,
+      port.friendlyName,
+      port.pnpId,
+      port.vendorId,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return (
+      text.includes("arduino") ||
+      text.includes("nano") ||
+      text.includes("mbed") ||
+      text.includes("usbmodem")
+    );
+  });
+
+  return likelyPort ? likelyPort.path : null;
+}
+
+async function ensureSerialConnected() {
+  if (!SerialPort) {
+    console.warn("serialport package is not installed. Run npm install in web-app.");
+    return false;
+  }
+
+  if (serialPort && serialPort.isOpen) {
+    return true;
+  }
+
+  const portPath = await findArduinoPortPath();
+  if (!portPath) {
+    console.warn("No Arduino serial port found. Set ARDUINO_PORT=/dev/tty... if needed.");
+    return false;
+  }
+
+  serialPath = portPath;
+  serialPort = new SerialPort({
+    path: serialPath,
+    baudRate: serialBaudRate,
+  });
+  let opened = false;
+
+  const parser = serialPort.pipe(new ReadlineParser({ delimiter: "\n" }));
+
+  serialPort.on("open", () => {
+    opened = true;
+    updateSerialConnection(true);
+    console.log(`Arduino serial connected on ${serialPath}`);
+  });
+
+  serialPort.on("close", () => {
+    updateSerialConnection(false);
+    console.log("Arduino serial disconnected");
+  });
+
+  serialPort.on("error", (error) => {
+    updateSerialConnection(false);
+    console.warn(`Arduino serial error: ${error.message}`);
+  });
+
+  parser.on("data", handleSerialLine);
+
+  await new Promise((resolve) => {
+    serialPort.once("open", resolve);
+    serialPort.once("error", resolve);
+  });
+
+  if (opened) {
+    await new Promise((resolve) => setTimeout(resolve, serialBootDelayMs));
+  }
+
+  return Boolean(serialPort && serialPort.isOpen);
+}
+
+function writeSerialLine(line) {
+  if (!serialPort || !serialPort.isOpen) {
+    return;
+  }
+
+  serialPort.write(`${line}\n`);
+}
+
+function handleSerialLine(rawLine) {
+  const line = rawLine.trim();
+  if (!line) {
+    return;
+  }
+
+  console.log(`[arduino] ${line}`);
+
+  if (line === "Connected to web app") {
+    updateSerialConnection(true);
+    return;
+  }
+
+  if (!line.startsWith("CHOICE:")) {
+    return;
+  }
+
+  const choice = normalizeChoice(line.slice("CHOICE:".length));
+  if (!choice) {
+    console.warn(`Ignored invalid Arduino choice: ${line}`);
+    return;
+  }
+
+  const result = advanceGameWithChoice(choice);
+  if (!result.ok) {
+    console.warn(`Ignored Arduino choice: ${result.error}`);
+  }
 }
 
 function sendJson(res, status, payload) {
@@ -189,20 +339,43 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/connect") {
-      state.connected = true;
-      state.message = "Connected to web app.";
-      console.log("Arduino connected to web app");
+      const serialReady = await ensureSerialConnected();
+      state.connected = serialReady;
+      state.message = serialReady
+        ? "Connected to web app."
+        : "Web app ready. Arduino serial not connected.";
+      writeSerialLine("START");
       sendJson(res, 200, publicState());
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/start") {
       state = createInitialState();
-      state.connected = true;
+      const serialReady = await ensureSerialConnected();
+      state.connected = serialReady;
+      updateSerialConnection(serialReady);
       state.started = true;
       state.currentWebChoice = choices[0];
       state.message = "Game started.";
+      writeSerialLine("START");
       sendJson(res, 200, publicState());
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/serial/ports") {
+      if (!SerialPort) {
+        sendJson(res, 200, {
+          available: false,
+          ports: [],
+          message: "Run npm install in web-app to enable serial support.",
+        });
+        return;
+      }
+
+      sendJson(res, 200, {
+        available: true,
+        ports: await SerialPort.list(),
+      });
       return;
     }
 
