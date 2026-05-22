@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rock Paper Scissors</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="stage" aria-labelledby="title">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">Arduino duel</p>
+            <h1 id="title">Rock Paper Scissors</h1>
+          </div>
+          <div class="connection" id="connectionStatus">Not connected</div>
+        </div>
+
+        <div class="game-grid">
+          <section class="arena">
+            <div class="countdown" id="countdown">Ready?</div>
+            <div class="choice-display" id="webChoice">
+              <span class="choice-icon">?</span>
+              <span class="choice-label">Hidden</span>
+            </div>
+            <p class="prompt" id="prompt">Click play when you're ready.</p>
+            <button class="primary-action" id="playButton" type="button">Play game</button>
+          </section>
+
+          <aside class="scoreboard">
+            <div class="score-row">
+              <span>You</span>
+              <strong id="userWins">0</strong>
+            </div>
+            <div class="score-row">
+              <span>Web app</span>
+              <strong id="webWins">0</strong>
+            </div>
+            <div class="rounds" id="rounds"></div>
+          </aside>
+        </div>
+
+        <section class="result-panel" id="resultPanel" aria-live="polite">
+          <span id="resultText">Waiting for the first round.</span>
+        </section>
+
+        <section class="simulate-panel" aria-label="Arduino simulator">
+          <span>Arduino sends</span>
+          <div class="simulate-actions">
+            <button type="button" data-choice="rock">Rock</button>
+            <button type="button" data-choice="paper">Paper</button>
+            <button type="button" data-choice="scissors">Scissors</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
