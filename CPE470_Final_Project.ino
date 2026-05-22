@@ -40,24 +40,8 @@ enum RpsChoice {
   kChoiceScissors = kScissorsIndex,
 };
 
-// constexpr int kButtonPin = 13;
-constexpr int kWinsNeeded = 3;
-constexpr int kRoundCount = 5;
-
-const RpsChoice kArduinoChoices[kRoundCount] = {
-    kChoiceRock,
-    kChoiceScissors,
-    kChoicePaper,
-    kChoiceRock,
-    kChoiceScissors,
-};
-
-int user_wins = 0;
-int arduino_wins = 0;
-int current_round = 0;
-bool game_over = false;
+bool web_game_active = false;
 bool waiting_for_release = false;
-bool prompt_printed = false;
 
 // In order to use optimized tensorflow lite kernels, a signed int8_t quantized
 // model is preferred over the legacy unsigned model format. This means that
@@ -77,13 +61,13 @@ bool readShieldButton();
 const char* ChoiceName(RpsChoice choice) {
   switch (choice) {
     case kChoiceRock:
-      return "ROCK";
+      return "rock";
     case kChoicePaper:
-      return "PAPER";
+      return "paper";
     case kChoiceScissors:
-      return "SCISSORS";
+      return "scissors";
     default:
-      return "UNKNOWN";
+      return "unknown";
   }
 }
 
@@ -104,42 +88,20 @@ bool UserBeatsArduino(RpsChoice user_choice, RpsChoice arduino_choice) {
          (user_choice == kChoiceScissors && arduino_choice == kChoicePaper);
 }
 
-// bool ButtonWasPressed() {
-//   const bool is_pressed = readShieldButton();
+void HandleSerialCommands() {
+  if (!Serial.available()) {
+    return;
+  }
 
-//   if (!is_pressed) {
-//     waiting_for_release = false;
-//     return false;
-//   }
+  String command = Serial.readStringUntil('\n');
+  command.trim();
 
-//   if (waiting_for_release) {
-//     return false;
-//   }
-
-//   delay(30);
-//   if (!readShieldButton()) {
-//     return false;
-//   }
-
-//   waiting_for_release = true;
-//   return true;
-// }
-
-void PrintRoundPrompt() {
-  Serial.print("Round ");
-  Serial.print(current_round + 1);
-  Serial.print(" of ");
-  Serial.print(kRoundCount);
-  Serial.println(": show your choice, then press the button.");
-}
-
-void FinishGameIfNeeded() {
-  if (user_wins >= kWinsNeeded) {
-    Serial.println("You won the game!");
-    game_over = true;
-  } else if (arduino_wins >= kWinsNeeded) {
-    Serial.println("Arduino won the game!");
-    game_over = true;
+  if (command == "START") {
+    web_game_active = true;
+    Serial.println("Connected to web app");
+  } else if (command == "STOP") {
+    web_game_active = false;
+    Serial.println("Disconnected from web app");
   }
 }
 
@@ -209,25 +171,15 @@ void setup() {
   // Get information about the memory area to use for the model's input.
   input = interpreter->input(0);
 
-  Serial.println("Rock Paper Scissors game ready.");
-  PrintRoundPrompt();
-  prompt_printed = true;
+  Serial.println("RPS detector ready");
+  Serial.println("Waiting for web app");
 }
 
 // The name of this function is important for Arduino compatibility.
 void loop() {
-  if (game_over) {
-    while (1) {
-      delay(1000);
-    }
-  }
+  HandleSerialCommands();
 
-  if (!prompt_printed) {
-    PrintRoundPrompt();
-    prompt_printed = true;
-  }
-
-  if (!readShieldButton()) {
+  if (!web_game_active || !readShieldButton()) {
     return;
   }
 
@@ -254,46 +206,6 @@ void loop() {
 
   RpsChoice user_choice =
       HighestScoringChoice(rock_score, paper_score, scissors_score);
-  RpsChoice arduino_choice = kArduinoChoices[current_round];
-
-  Serial.print("You played ");
-  Serial.print(ChoiceName(user_choice));
-  Serial.print(". Arduino played ");
-  Serial.print(ChoiceName(arduino_choice));
-  Serial.println(".");
-
-  if (user_choice == arduino_choice) {
-    Serial.println("Tie. Same Arduino choice, try again.");
-    prompt_printed = false;
-    return;
-  }
-
-  if (UserBeatsArduino(user_choice, arduino_choice)) {
-    user_wins++;
-    Serial.println("You win this round.");
-  } else {
-    arduino_wins++;
-    Serial.println("Arduino wins this round.");
-  }
-
-  Serial.print("Score - You: ");
-  Serial.print(user_wins);
-  Serial.print(" Arduino: ");
-  Serial.println(arduino_wins);
-
-  current_round++;
-  FinishGameIfNeeded();
-
-  if (!game_over && current_round >= kRoundCount) {
-    if (user_wins > arduino_wins) {
-      Serial.println("You won the game!");
-    } else if (arduino_wins > user_wins) {
-      Serial.println("Arduino won the game!");
-    } else {
-      Serial.println("Game ended in a tie.");
-    }
-    game_over = true;
-  }
-
-  prompt_printed = false;
+  Serial.print("CHOICE:");
+  Serial.println(ChoiceName(user_choice));
 }
