@@ -40,7 +40,7 @@ enum RpsChoice {
   kChoiceScissors = kScissorsIndex,
 };
 
-constexpr int kButtonPin = 13;
+// constexpr int kButtonPin = 13;
 constexpr int kWinsNeeded = 3;
 constexpr int kRoundCount = 5;
 
@@ -70,6 +70,9 @@ bool prompt_printed = false;
 constexpr int kTensorArenaSize = 160 * 1024;
 static uint8_t tensor_arena[kTensorArenaSize];
 }  // namespace
+
+void initializeShield();
+bool readShieldButton();
 
 const char* ChoiceName(RpsChoice choice) {
   switch (choice) {
@@ -101,26 +104,26 @@ bool UserBeatsArduino(RpsChoice user_choice, RpsChoice arduino_choice) {
          (user_choice == kChoiceScissors && arduino_choice == kChoicePaper);
 }
 
-bool ButtonWasPressed() {
-  const bool is_pressed = digitalRead(kButtonPin) == LOW;
+// bool ButtonWasPressed() {
+//   const bool is_pressed = readShieldButton();
 
-  if (!is_pressed) {
-    waiting_for_release = false;
-    return false;
-  }
+//   if (!is_pressed) {
+//     waiting_for_release = false;
+//     return false;
+//   }
 
-  if (waiting_for_release) {
-    return false;
-  }
+//   if (waiting_for_release) {
+//     return false;
+//   }
 
-  delay(30);
-  if (digitalRead(kButtonPin) != LOW) {
-    return false;
-  }
+//   delay(30);
+//   if (!readShieldButton()) {
+//     return false;
+//   }
 
-  waiting_for_release = true;
-  return true;
-}
+//   waiting_for_release = true;
+//   return true;
+// }
 
 void PrintRoundPrompt() {
   Serial.print("Round ");
@@ -150,7 +153,7 @@ void setup() {
   // Wait for the serial port to connect
   while (!Serial); 
 
-  pinMode(kButtonPin, INPUT_PULLUP);
+  initializeShield();
 
   static tflite::MicroErrorReporter micro_error_reporter;
   error_reporter = &micro_error_reporter;
@@ -224,7 +227,7 @@ void loop() {
     prompt_printed = true;
   }
 
-  if (!ButtonWasPressed()) {
+  if (!readShieldButton()) {
     return;
   }
 
