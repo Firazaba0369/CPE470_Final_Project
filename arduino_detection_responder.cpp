@@ -23,9 +23,11 @@ limitations under the License.
 
 #include "Arduino.h"
 
-// Flash the blue LED after each inference
+// Update the RGB LED for the latest detected choice.
 void RespondToDetection(tflite::ErrorReporter* error_reporter,
                         int8_t rock_score,int8_t paper_score, int8_t scissors_score) {
+  (void)error_reporter;
+
   static bool is_initialized = false;
   if (!is_initialized) {
     // Pins for the built-in RGB LEDs on the Arduino Nano 33 BLE Sense
@@ -38,42 +40,24 @@ void RespondToDetection(tflite::ErrorReporter* error_reporter,
   // Note: The RGB LEDs on the Arduino Nano 33 BLE
   // Sense are on when the pin is LOW, off when HIGH.
 
-  // Switch the person/not person LEDs off
-  // digitalWrite(LEDG, HIGH);
-  // digitalWrite(LEDR, HIGH);
-
-  // Flash the blue LED after every inference.
-  // digitalWrite(LEDB, LOW);
-  // delay(100);
-  // digitalWrite(LEDB, HIGH);
-  // RED TEST
-
-  // Switch on the green LED when a person is detected,
-  // the red when rock is detected
+  // Red when rock is detected.
   if (rock_score > paper_score && rock_score > scissors_score) {
     digitalWrite(LEDR, LOW);  // ON
     digitalWrite(LEDG, HIGH);   // OFF
     digitalWrite(LEDB, HIGH);  // OFF
-    Serial.println("ROCK");
-    
   } 
-  // Switch on the blue LED whe paper detected 
+  // Green when paper is detected.
   else if (paper_score > rock_score && paper_score > scissors_score){
     digitalWrite(LEDR, HIGH);  // OFF
     digitalWrite(LEDG, LOW);   // ON (BLUE AND GREEN FLIPPED FOR SOME REASON)
     digitalWrite(LEDB, HIGH);  // OFF
-    Serial.println("PAPER");
   }
-  // Switch on green LED when scissors deteccted
+  // Blue when scissors is detected.
   else {
     digitalWrite(LEDR, HIGH);  // OFF
     digitalWrite(LEDG, HIGH);   // OFF
     digitalWrite(LEDB, LOW);  // ON (BLUE AND GREEN FLIPPED FOR SOME REASON)
-    Serial.println("SCISSORS");
   }
-
-  TF_LITE_REPORT_ERROR(error_reporter, "Rock score: %d Paper score: %d Scissors score: %d",
-                       rock_score, paper_score, scissors_score);
 }
 
 #endif  // ARDUINO_EXCLUDE_CODE
