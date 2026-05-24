@@ -20,10 +20,116 @@
         <div class="game-grid">
           <section class="arena">
             <div class="countdown" id="countdown">Ready?</div>
-            <div class="choice-display" id="webChoice">
-              <span class="choice-icon">?</span>
-              <span class="choice-label">Hidden</span>
+
+            <div
+              style="
+                display: flex;
+                gap: 24px;
+                align-items: stretch;
+                justify-content: center;
+                width: 100%;
+              "
+            >
+              <!-- Web App Choice -->
+              <div
+                style="
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  gap: 8px;
+                "
+              >
+                <span
+                  style="
+                    color: var(--muted);
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    font-size: 0.8rem;
+                  "
+                  >Computer</span
+                >
+                <div
+                  class="choice-display"
+                  id="webChoice"
+                  style="
+                    margin: 0;
+                    width: 180px;
+                    height: 180px;
+                    min-height: unset;
+                    aspect-ratio: unset;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                  "
+                >
+                  <span class="choice-icon">?</span>
+                  <span class="choice-label">Hidden</span>
+                </div>
+              </div>
+
+              <!-- Arduino (User) Choice -->
+              <div
+                style="
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  gap: 8px;
+                "
+              >
+                <span
+                  style="
+                    color: var(--muted);
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    font-size: 0.8rem;
+                  "
+                  >Arduino Camera</span
+                >
+                <section
+                  class="choice-display"
+                  aria-label="Serial image capture"
+                  style="
+                    margin: 0;
+                    width: 180px;
+                    height: 180px;
+                    padding: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    min-height: unset;
+                    aspect-ratio: unset;
+                  "
+                >
+                  <canvas
+                    id="captureCanvas"
+                    width="64"
+                    height="64"
+                    aria-label="Serial image preview"
+                    style="
+                      display: block;
+                      margin: 0 auto;
+                      border-radius: 4px;
+                      width: 100%;
+                      max-width: 100%;
+                      flex: 1;
+                      min-height: 0;
+                      min-width: 0;
+                      object-fit: contain;
+                      background: transparent;
+                      image-rendering: pixelated;
+                    "
+                  ></canvas>
+                  <span
+                    class="choice-label"
+                    id="userChoiceLabel"
+                    style="margin-top: 8px; text-align: center"
+                    >Waiting</span
+                  >
+                </section>
+              </div>
             </div>
+
             <p class="prompt" id="prompt">Click play when you're ready.</p>
             <button class="primary-action" id="playButton" type="button">
               Play game
@@ -40,33 +146,6 @@
               <strong id="webWins">0</strong>
             </div>
             <div class="rounds" id="rounds"></div>
-
-            <section
-              class="serial-panel"
-              aria-label="Serial image capture"
-              style="margin-top: 12px"
-            >
-              <div
-                class="score-row"
-                style="margin-bottom: 12px; min-height: 40px; padding: 8px 16px"
-              >
-                <span>Serial image</span>
-              </div>
-              <canvas
-                id="captureCanvas"
-                width="192"
-                height="192"
-                aria-label="Serial image preview"
-                style="
-                  display: block;
-                  margin: 0 auto;
-                  border-radius: 4px;
-                  max-width: 100%;
-                  object-fit: contain;
-                  background: #e0d8d0;
-                "
-              ></canvas>
-            </section>
           </aside>
         </div>
 

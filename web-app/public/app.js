@@ -31,6 +31,7 @@ const elements = {
   resultText: document.querySelector("#resultText"),
   simulateButtons: [...document.querySelectorAll("[data-choice]")],
   captureCanvas: document.querySelector("#captureCanvas"),
+  userChoiceLabel: document.querySelector("#userChoiceLabel"),
 };
 
 // Socket.IO image handler (server -> clients)
@@ -78,7 +79,11 @@ function clearNextRoundTimer() {
 }
 
 function renderRoundDots(game) {
-  const currentRound = Math.min(game.roundIndex + 1, game.totalRounds);
+  // If the game ended early (e.g. best 3 out of 5), don't increment the round text counter anymore
+  const currentRound = game.gameOver
+    ? game.roundIndex
+    : Math.min(game.roundIndex + 1, game.totalRounds);
+
   const dots = game.choices
     .map((_, index) => {
       const active =
@@ -230,6 +235,8 @@ async function runCountdown(game) {
   elements.playButton.disabled = true;
   elements.prompt.textContent = "Turn around and face the Arduino.";
   choiceMarkup(null);
+  if (elements.userChoiceLabel)
+    elements.userChoiceLabel.textContent = "Waiting";
 
   const readyState = await api("/api/round-ready", { method: "POST" });
   render(readyState);
@@ -243,7 +250,7 @@ async function runCountdown(game) {
   state.busy = false;
   render(readyState);
   elements.countdown.textContent = "Shoot";
-  choiceMarkup(readyState.currentWebChoice);
+  choiceMarkup(null); // Keep the web app's choice hidden until the Arduino button is pressed
   elements.prompt.textContent = "Show your hand and press the Arduino button.";
 }
 
@@ -325,23 +332,42 @@ async function pollState() {
     const key = resultKeyFor(game);
 
     if (key !== state.lastResultKey) {
+      // Parse previous score totals from the key string
+      const oldParts = state.lastResultKey
+        ? state.lastResultKey.split("|")
+        : [];
+      const oldResultsCount =
+        (parseInt(oldParts[1]) || 0) +
+        (parseInt(oldParts[2]) || 0) +
+        (parseInt(oldParts[3]) || 0);
+
       state.lastResultKey = key;
       render(game);
-      if (game.lastWebChoice && !game.waitingForArduino) {
-        choiceMarkup(game.lastWebChoice);
-      }
 
-      if (
-        game.started &&
-        !game.gameOver &&
-        !game.waitingForArduino &&
-        game.lastResult
-      ) {
-        elements.prompt.textContent = "Next round starting.";
-        clearNextRoundTimer();
-        state.nextRoundTimer = setTimeout(() => {
-          nextRound();
-        }, resultPauseMs);
+      // Calculate new score totals
+      const newResultsCount =
+        (game.userWins || 0) + (game.webWins || 0) + (game.ties || 0);
+
+      // If the overall score/ties increased, a hardware result JUST arrived!
+      if (newResultsCount > oldResultsCount) {
+        if (game.lastWebChoice) {
+          choiceMarkup(game.lastWebChoice); // Reveal the bot's choice!
+        }
+        if (game.lastUserChoice && elements.userChoiceLabel) {
+          elements.userChoiceLabel.textContent =
+            labels[game.lastUserChoice] || "Unknown"; // Reveal Arduino's prediction!
+        }
+
+        if (game.started && !game.gameOver) {
+          elements.prompt.textContent =
+            game.lastResult === "tie"
+              ? "Tie. Restarting countdown..."
+              : "Next round starting.";
+          clearNextRoundTimer();
+          state.nextRoundTimer = setTimeout(() => {
+            nextRound();
+          }, resultPauseMs);
+        }
       }
     }
   } catch (error) {
