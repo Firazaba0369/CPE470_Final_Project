@@ -15,10 +15,10 @@ try {
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
 const PUBLIC_DIR = path.join(__dirname, "public");
-const { Server: SocketServer } = require('socket.io');
+const { Server: SocketServer } = require("socket.io");
 
-const choices = ["rock", "scissors", "paper", "rock", "scissors"];
 const winsNeeded = 3;
+const totalRoundsAllowed = 5;
 const serialBaudRate = 921600;
 const serialBootDelayMs = 2500;
 
@@ -27,7 +27,7 @@ let serialPath = process.env.ARDUINO_PORT || null;
 
 // Serial image buffering (collected from Arduino between IMAGE_START / IMAGE_END)
 let serialImageCollecting = false;
-let serialImageBuffer = '';
+let serialImageBuffer = "";
 
 let state = createInitialState();
 
@@ -56,9 +56,8 @@ function publicState() {
     ...state,
     serialConnected: Boolean(serialPort && serialPort.isOpen),
     serialPath,
-    choices,
     winsNeeded,
-    totalRounds: choices.length,
+    totalRounds: totalRoundsAllowed,
   };
 }
 
@@ -87,11 +86,11 @@ function advanceGameWithChoice(userChoice) {
     return { ok: false, error: "Game is not accepting choices." };
   }
 
-  if (!state.waitingForArduino) {
-    return { ok: false, error: "Round is not waiting for Arduino yet." };
-  }
+  // Generate the computer's choice right when the hardware data arrives
+  const possibleChoices = ["rock", "paper", "scissors"];
+  const webChoice =
+    possibleChoices[Math.floor(Math.random() * possibleChoices.length)];
 
-  const webChoice = choices[state.roundIndex];
   state.currentWebChoice = webChoice;
   state.lastWebChoice = webChoice;
   state.lastUserChoice = userChoice;
@@ -99,7 +98,6 @@ function advanceGameWithChoice(userChoice) {
   if (userChoice === webChoice) {
     state.ties += 1;
     state.lastResult = "tie";
-    state.waitingForArduino = true;
     state.message = "Tie. Same choice stays up.";
     return { ok: true, state: publicState() };
   }
@@ -115,7 +113,6 @@ function advanceGameWithChoice(userChoice) {
   }
 
   state.roundIndex += 1;
-  state.waitingForArduino = false;
 
   if (state.userWins >= winsNeeded) {
     state.gameOver = true;
@@ -123,7 +120,7 @@ function advanceGameWithChoice(userChoice) {
   } else if (state.webWins >= winsNeeded) {
     state.gameOver = true;
     state.message = "I won the game.";
-  } else if (state.roundIndex >= choices.length) {
+  } else if (state.roundIndex >= totalRoundsAllowed) {
     state.gameOver = true;
     state.message =
       state.userWins > state.webWins ? "You won the game." : "I won the game.";
@@ -167,7 +164,9 @@ async function findArduinoPortPath() {
 
 async function ensureSerialConnected() {
   if (!SerialPort) {
-    console.warn("serialport package is not installed. Run npm install in web-app.");
+    console.warn(
+      "serialport package is not installed. Run npm install in web-app.",
+    );
     return false;
   }
 
@@ -177,7 +176,9 @@ async function ensureSerialConnected() {
 
   const portPath = await findArduinoPortPath();
   if (!portPath) {
-    console.warn("No Arduino serial port found. Set ARDUINO_PORT=/dev/tty... if needed.");
+    console.warn(
+      "No Arduino serial port found. Set ARDUINO_PORT=/dev/tty... if needed.",
+    );
     return false;
   }
 
@@ -232,7 +233,7 @@ function handleSerialLine(rawLine) {
   // rawLine comes from ReadlineParser (delimiter '\n') and may not include terminating newline
   if (!rawLine) return;
   // preserve original raw content for image collection (avoid trimming inside image)
-  const raw = typeof rawLine === 'string' ? rawLine : String(rawLine);
+  const raw = typeof rawLine === "string" ? rawLine : String(rawLine);
   const trimmed = raw.trim();
 
   console.log(`[arduino] ${trimmed}`);
@@ -240,7 +241,7 @@ function handleSerialLine(rawLine) {
   // handle PGM image markers
   if (trimmed === "IMAGE_START") {
     serialImageCollecting = true;
-    serialImageBuffer = '';
+    serialImageBuffer = "";
     return;
   }
 
@@ -248,17 +249,17 @@ function handleSerialLine(rawLine) {
     serialImageCollecting = false;
     // emit image to connected socket.io clients
     try {
-      io && io.emit && io.emit('serial-image', { pgm: serialImageBuffer });
+      io && io.emit && io.emit("serial-image", { pgm: serialImageBuffer });
     } catch (err) {
-      console.warn('Failed to emit serial-image', err);
+      console.warn("Failed to emit serial-image", err);
     }
-    serialImageBuffer = '';
+    serialImageBuffer = "";
     return;
   }
 
   if (serialImageCollecting) {
     // append the raw line (without losing whitespace) and restore newline
-    serialImageBuffer += raw.replace(new RegExp('\\r?\\n$'), '') + '\n';
+    serialImageBuffer += raw.replace(new RegExp("\\r?\\n$"), "") + "\n";
     return;
   }
 
@@ -389,7 +390,7 @@ const server = http.createServer(async (req, res) => {
       state.connected = serialReady;
       updateSerialConnection(serialReady);
       state.started = true;
-      state.currentWebChoice = choices[0];
+      state.currentWebChoice = null;
       state.message = "Game started.";
       writeSerialLine("START");
       sendJson(res, 200, publicState());
@@ -415,11 +416,14 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/round-ready") {
       if (!state.started || state.gameOver) {
-        sendJson(res, 409, { error: "Game is not active.", state: publicState() });
+        sendJson(res, 409, {
+          error: "Game is not active.",
+          state: publicState(),
+        });
         return;
       }
 
-      state.currentWebChoice = choices[state.roundIndex];
+      state.currentWebChoice = null;
       state.waitingForArduino = true;
       state.message = "Waiting for Arduino choice.";
       sendJson(res, 200, publicState());
@@ -431,7 +435,9 @@ const server = http.createServer(async (req, res) => {
       const choice = normalizeChoice(body.choice);
 
       if (!choice) {
-        sendJson(res, 400, { error: "Choice must be rock, paper, or scissors." });
+        sendJson(res, 400, {
+          error: "Choice must be rock, paper, or scissors.",
+        });
         return;
       }
 
@@ -440,23 +446,24 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    
     if (req.method === "POST" && url.pathname === "/api/debug/send-pgm") {
       // small 8x8 test PGM (P2) — simple gradient
-      const w = 8, h = 8, max = 255;
+      const w = 8,
+        h = 8,
+        max = 255;
       const pixels = [];
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
-          pixels.push(Math.round((x + y) / (w + h - 2) * max));
+          pixels.push(Math.round(((x + y) / (w + h - 2)) * max));
         }
       }
       const header = `P2\n${w} ${h}\n${max}\n`;
-      const body = pixels.join(' ');
-      const pgm = header + body + '\n';
+      const body = pixels.join(" ");
+      const pgm = header + body + "\n";
       try {
-        io && io.emit && io.emit('serial-image', { pgm });
+        io && io.emit && io.emit("serial-image", { pgm });
       } catch (err) {
-        console.warn('emit test pgm failed', err);
+        console.warn("emit test pgm failed", err);
       }
       sendJson(res, 200, { ok: true });
       return;
@@ -476,9 +483,9 @@ const server = http.createServer(async (req, res) => {
 const io = new SocketServer(server);
 
 // Emit connection events for debugging
-io.on('connection', (socket) => {
-  console.log('socket.io client connected');
-  socket.on('disconnect', () => console.log('socket.io client disconnected'));
+io.on("connection", (socket) => {
+  console.log("socket.io client connected");
+  socket.on("disconnect", () => console.log("socket.io client disconnected"));
 });
 
 server.listen(PORT, HOST, () => {

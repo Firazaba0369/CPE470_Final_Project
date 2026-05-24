@@ -84,7 +84,8 @@ function renderRoundDots(game) {
     ? game.roundIndex
     : Math.min(game.roundIndex + 1, game.totalRounds);
 
-  const dots = game.choices
+  // Generate dots up to totalRounds
+  const dots = Array.from({ length: game.totalRounds })
     .map((_, index) => {
       const active =
         game.started && !game.gameOver && index === game.roundIndex;
