@@ -15,7 +15,7 @@ const state = {
   nextRoundTimer: null,
   busy: false,
   lastResultKey: "",
-  };
+};
 
 const resultPauseMs = 1200;
 
@@ -34,16 +34,16 @@ const elements = {
 };
 
 // Socket.IO image handler (server -> clients)
-if (typeof io !== 'undefined') {
+if (typeof io !== "undefined") {
   try {
     const socket = io();
-    socket.on('serial-image', (data) => {
+    socket.on("serial-image", (data) => {
       if (data && data.pgm) {
         displayPGM(data.pgm);
       }
     });
   } catch (err) {
-    console.warn('socket.io init failed', err);
+    console.warn("socket.io init failed", err);
   }
 }
 
@@ -81,7 +81,8 @@ function renderRoundDots(game) {
   const currentRound = Math.min(game.roundIndex + 1, game.totalRounds);
   const dots = game.choices
     .map((_, index) => {
-      const active = game.started && !game.gameOver && index === game.roundIndex;
+      const active =
+        game.started && !game.gameOver && index === game.roundIndex;
       const done = index < game.roundIndex;
       return `<span class="round-dot ${active ? "active" : ""} ${done ? "done" : ""}"></span>`;
     })
@@ -112,7 +113,11 @@ function parsePGM(pgmText) {
     .map(Number)
     .filter((value) => Number.isFinite(value));
 
-  if (!Number.isFinite(width) || !Number.isFinite(height) || !Number.isFinite(maxValue)) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    !Number.isFinite(maxValue)
+  ) {
     return null;
   }
 
@@ -129,15 +134,22 @@ function renderPGMToCanvas(canvas, pgm) {
     return;
   }
 
+  // Set the canvas rendering resolution
   canvas.width = pgm.width;
   canvas.height = pgm.height;
+
+  // Use CSS to visually scale the canvas up (e.g. 3x larger) while keeping pixel art sharp
+  canvas.style.width = pgm.width * 3 + "px";
+  canvas.style.height = pgm.height * 3 + "px";
+  canvas.style.imageRendering = "pixelated"; // Prevents the image from getting blurry when scaled
 
   const imageData = context.createImageData(pgm.width, pgm.height);
   const data = imageData.data;
 
   for (let index = 0; index < pgm.width * pgm.height; index += 1) {
     const value = pgm.pixels[index] ?? 0;
-    const shade = pgm.maxValue > 0 ? Math.round((value / pgm.maxValue) * 255) : 0;
+    const shade =
+      pgm.maxValue > 0 ? Math.round((value / pgm.maxValue) * 255) : 0;
     const offset = index * 4;
     data[offset] = shade;
     data[offset + 1] = shade;
@@ -339,7 +351,9 @@ async function pollState() {
 
 elements.playButton.addEventListener("click", nextRound);
 elements.simulateButtons.forEach((button) => {
-  button.addEventListener("click", () => sendSimulatedChoice(button.dataset.choice));
+  button.addEventListener("click", () =>
+    sendSimulatedChoice(button.dataset.choice),
+  );
 });
 
 api("/api/state")

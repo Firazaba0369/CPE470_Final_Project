@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rock Paper Scissors</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell">
@@ -25,7 +25,9 @@
               <span class="choice-label">Hidden</span>
             </div>
             <p class="prompt" id="prompt">Click play when you're ready.</p>
-            <button class="primary-action" id="playButton" type="button">Play game</button>
+            <button class="primary-action" id="playButton" type="button">
+              Play game
+            </button>
           </section>
 
           <aside class="scoreboard">
@@ -38,18 +40,38 @@
               <strong id="webWins">0</strong>
             </div>
             <div class="rounds" id="rounds"></div>
+
+            <section
+              class="serial-panel"
+              aria-label="Serial image capture"
+              style="margin-top: 12px"
+            >
+              <div
+                class="score-row"
+                style="margin-bottom: 12px; min-height: 40px; padding: 8px 16px"
+              >
+                <span>Serial image</span>
+              </div>
+              <canvas
+                id="captureCanvas"
+                width="192"
+                height="192"
+                aria-label="Serial image preview"
+                style="
+                  display: block;
+                  margin: 0 auto;
+                  border-radius: 4px;
+                  max-width: 100%;
+                  object-fit: contain;
+                  background: #e0d8d0;
+                "
+              ></canvas>
+            </section>
           </aside>
         </div>
 
         <section class="result-panel" id="resultPanel" aria-live="polite">
           <span id="resultText">Waiting for the first round.</span>
-        </section>
-
-        <section class="serial-panel" aria-label="Serial image capture">
-          <div class="score-row">
-            <span>Serial image</span>
-          </div>
-          <canvas id="captureCanvas" width="320" height="240" aria-label="Serial image preview"></canvas>
         </section>
 
         <section class="simulate-panel" aria-label="Arduino simulator">
