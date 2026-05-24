@@ -15,7 +15,7 @@ const state = {
   nextRoundTimer: null,
   busy: false,
   lastResultKey: "",
-};
+  };
 
 const resultPauseMs = 1200;
 
@@ -30,7 +30,22 @@ const elements = {
   rounds: document.querySelector("#rounds"),
   resultText: document.querySelector("#resultText"),
   simulateButtons: [...document.querySelectorAll("[data-choice]")],
+  captureCanvas: document.querySelector("#captureCanvas"),
 };
+
+// Socket.IO image handler (server -> clients)
+if (typeof io !== 'undefined') {
+  try {
+    const socket = io();
+    socket.on('serial-image', (data) => {
+      if (data && data.pgm) {
+        displayPGM(data.pgm);
+      }
+    });
+  } catch (err) {
+    console.warn('socket.io init failed', err);
+  }
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -76,6 +91,76 @@ function renderRoundDots(game) {
     <span class="round-label">Round ${currentRound} / ${game.totalRounds}</span>
     <div class="round-track">${dots}</div>
   `;
+}
+
+function parsePGM(pgmText) {
+  const lines = pgmText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+
+  if (lines.length < 4 || lines[0] !== "P2") {
+    return null;
+  }
+
+  const [width, height] = lines[1].split(/\s+/).map(Number);
+  const maxValue = Number(lines[2]);
+  const pixels = lines
+    .slice(3)
+    .join(" ")
+    .split(/\s+/)
+    .map(Number)
+    .filter((value) => Number.isFinite(value));
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || !Number.isFinite(maxValue)) {
+    return null;
+  }
+
+  if (pixels.length < width * height) {
+    return null;
+  }
+
+  return { width, height, maxValue, pixels };
+}
+
+function renderPGMToCanvas(canvas, pgm) {
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return;
+  }
+
+  canvas.width = pgm.width;
+  canvas.height = pgm.height;
+
+  const imageData = context.createImageData(pgm.width, pgm.height);
+  const data = imageData.data;
+
+  for (let index = 0; index < pgm.width * pgm.height; index += 1) {
+    const value = pgm.pixels[index] ?? 0;
+    const shade = pgm.maxValue > 0 ? Math.round((value / pgm.maxValue) * 255) : 0;
+    const offset = index * 4;
+    data[offset] = shade;
+    data[offset + 1] = shade;
+    data[offset + 2] = shade;
+    data[offset + 3] = 255;
+  }
+
+  context.putImageData(imageData, 0, 0);
+}
+
+function displayPGM(pgmText) {
+  const pgm = parsePGM(pgmText);
+  if (!pgm) {
+    console.error("Invalid PGM data received from serial.");
+    return;
+  }
+
+  if (!elements.captureCanvas) {
+    console.warn("Missing #captureCanvas element.");
+    return;
+  }
+
+  renderPGMToCanvas(elements.captureCanvas, pgm);
 }
 
 function render(game) {

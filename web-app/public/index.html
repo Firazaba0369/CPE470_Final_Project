@@ -45,6 +45,13 @@
           <span id="resultText">Waiting for the first round.</span>
         </section>
 
+        <section class="serial-panel" aria-label="Serial image capture">
+          <div class="score-row">
+            <span>Serial image</span>
+          </div>
+          <canvas id="captureCanvas" width="320" height="240" aria-label="Serial image preview"></canvas>
+        </section>
+
         <section class="simulate-panel" aria-label="Arduino simulator">
           <span>Arduino sends</span>
           <div class="simulate-actions">
@@ -56,6 +63,7 @@
       </section>
     </main>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

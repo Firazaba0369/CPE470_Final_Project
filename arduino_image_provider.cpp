@@ -49,6 +49,32 @@ TfLiteStatus GetImage(tflite::ErrorReporter* error_reporter, int image_width,
   //   }
   // }
 
+  // Send image to serial
+  Serial.println("IMAGE_START");
+  Serial.println("P2");
+  Serial.println("64 64");
+  Serial.println("255");
+
+  // Send image data to web-app via serial portx
+  for (int y = 0; y < 64; y++) {
+    for (int x = 0; x < 64; x++) {
+      int src_x = x * 176 / 64;
+      int src_y = y * 144 / 64;
+      int pixel = data[(src_y * 176) + src_x];
+      Serial.print(pixel);
+
+      if (!(x == 63 && y == 63)) {
+        Serial.print(" ");
+      }
+    }
+    Serial.println();
+  }
+
+  Serial.println("IMAGE_END");
+
+  // Fill TensorFlow model input
+  index = 0;
+
   //Downsample to keep FOV
   for (int y = 0; y < 64; y++) {
     for (int x = 0; x < 64; x++) {

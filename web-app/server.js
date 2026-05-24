@@ -15,6 +15,7 @@ try {
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
 const PUBLIC_DIR = path.join(__dirname, "public");
+const { Server: SocketServer } = require('socket.io');
 
 const choices = ["rock", "scissors", "paper", "rock", "scissors"];
 const winsNeeded = 3;
@@ -23,6 +24,10 @@ const serialBootDelayMs = 2500;
 
 let serialPort = null;
 let serialPath = process.env.ARDUINO_PORT || null;
+
+// Serial image buffering (collected from Arduino between IMAGE_START / IMAGE_END)
+let serialImageCollecting = false;
+let serialImageBuffer = '';
 
 let state = createInitialState();
 
@@ -224,25 +229,55 @@ function writeSerialLine(line) {
 }
 
 function handleSerialLine(rawLine) {
-  const line = rawLine.trim();
-  if (!line) {
+  // rawLine comes from ReadlineParser (delimiter '\n') and may not include terminating newline
+  if (!rawLine) return;
+  // preserve original raw content for image collection (avoid trimming inside image)
+  const raw = typeof rawLine === 'string' ? rawLine : String(rawLine);
+  const trimmed = raw.trim();
+
+  console.log(`[arduino] ${trimmed}`);
+
+  // handle PGM image markers
+  if (trimmed === "IMAGE_START") {
+    serialImageCollecting = true;
+    serialImageBuffer = '';
     return;
   }
 
-  console.log(`[arduino] ${line}`);
+  if (trimmed === "IMAGE_END") {
+    serialImageCollecting = false;
+    // emit image to connected socket.io clients
+    try {
+      io && io.emit && io.emit('serial-image', { pgm: serialImageBuffer });
+    } catch (err) {
+      console.warn('Failed to emit serial-image', err);
+    }
+    serialImageBuffer = '';
+    return;
+  }
 
-  if (line === "Connected to web app") {
+  if (serialImageCollecting) {
+    // append the raw line (without losing whitespace) and restore newline
+    serialImageBuffer += raw.replace(new RegExp('\\r?\\n$'), '') + '\n';
+    return;
+  }
+
+  if (!trimmed) {
+    return;
+  }
+
+  if (trimmed === "Connected to web app") {
     updateSerialConnection(true);
     return;
   }
 
-  if (!line.startsWith("CHOICE:")) {
+  if (!trimmed.startsWith("CHOICE:")) {
     return;
   }
 
-  const choice = normalizeChoice(line.slice("CHOICE:".length));
+  const choice = normalizeChoice(trimmed.slice("CHOICE:".length));
   if (!choice) {
-    console.warn(`Ignored invalid Arduino choice: ${line}`);
+    console.warn(`Ignored invalid Arduino choice: ${trimmed}`);
     return;
   }
 
@@ -251,7 +286,6 @@ function handleSerialLine(rawLine) {
     console.warn(`Ignored Arduino choice: ${result.error}`);
   }
 }
-
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
@@ -406,6 +440,28 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    
+    if (req.method === "POST" && url.pathname === "/api/debug/send-pgm") {
+      // small 8x8 test PGM (P2) — simple gradient
+      const w = 8, h = 8, max = 255;
+      const pixels = [];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          pixels.push(Math.round((x + y) / (w + h - 2) * max));
+        }
+      }
+      const header = `P2\n${w} ${h}\n${max}\n`;
+      const body = pixels.join(' ');
+      const pgm = header + body + '\n';
+      try {
+        io && io.emit && io.emit('serial-image', { pgm });
+      } catch (err) {
+        console.warn('emit test pgm failed', err);
+      }
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
     if (url.pathname.startsWith("/api/")) {
       sendJson(res, 404, { error: "API route not found." });
       return;
@@ -415,6 +471,14 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     sendJson(res, 500, { error: error.message });
   }
+});
+
+const io = new SocketServer(server);
+
+// Emit connection events for debugging
+io.on('connection', (socket) => {
+  console.log('socket.io client connected');
+  socket.on('disconnect', () => console.log('socket.io client disconnected'));
 });
 
 server.listen(PORT, HOST, () => {
