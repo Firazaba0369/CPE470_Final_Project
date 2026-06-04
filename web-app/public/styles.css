@@ -252,6 +252,11 @@ h1 {
   background: var(--gold);
 }
 
+.round-dot.lost {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
 .result-panel {
   display: flex;
   align-items: center;

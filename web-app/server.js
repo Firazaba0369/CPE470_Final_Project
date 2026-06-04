@@ -39,6 +39,7 @@ function createInitialState() {
     started: false,
     gameOver: false,
     roundIndex: 0,
+    roundResults: [], // keeps winner for each completed round: "user" or "web"
     userWins: 0,
     webWins: 0,
     ties: 0,
@@ -86,7 +87,6 @@ function advanceGameWithChoice(userChoice) {
     return { ok: false, error: "Game is not accepting choices." };
   }
 
-  // Generate the computer's choice right when the hardware data arrives
   const possibleChoices = ["rock", "paper", "scissors"];
   const webChoice =
     possibleChoices[Math.floor(Math.random() * possibleChoices.length)];
@@ -102,16 +102,19 @@ function advanceGameWithChoice(userChoice) {
     return { ok: true, state: publicState() };
   }
 
+  let roundWinner = "web";
   if (userBeatsWeb(userChoice, webChoice)) {
     state.userWins += 1;
     state.lastResult = "user";
     state.message = "You won that round.";
+    roundWinner = "user";
   } else {
     state.webWins += 1;
     state.lastResult = "web";
     state.message = "I won that round.";
   }
 
+  state.roundResults.push(roundWinner);
   state.roundIndex += 1;
 
   if (state.userWins >= winsNeeded) {

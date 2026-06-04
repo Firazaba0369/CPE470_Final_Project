@@ -79,18 +79,19 @@ function clearNextRoundTimer() {
 }
 
 function renderRoundDots(game) {
-  // If the game ended early (e.g. best 3 out of 5), don't increment the round text counter anymore
   const currentRound = game.gameOver
     ? game.roundIndex
     : Math.min(game.roundIndex + 1, game.totalRounds);
 
-  // Generate dots up to totalRounds
+  const roundResults = Array.isArray(game.roundResults) ? game.roundResults : [];
+
   const dots = Array.from({ length: game.totalRounds })
     .map((_, index) => {
-      const active =
-        game.started && !game.gameOver && index === game.roundIndex;
+      const active = game.started && !game.gameOver && index === game.roundIndex;
       const done = index < game.roundIndex;
-      return `<span class="round-dot ${active ? "active" : ""} ${done ? "done" : ""}"></span>`;
+      const lost = done && roundResults[index] === "web";
+
+      return `<span class="round-dot ${active ? "active" : ""} ${done ? "done" : ""} ${lost ? "lost" : ""}"></span>`;
     })
     .join("");
 
