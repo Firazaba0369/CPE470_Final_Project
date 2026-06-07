@@ -40,6 +40,8 @@ enum RpsChoice {
   kChoiceScissors = kScissorsIndex,
 };
 
+// The web app controls when gameplay is active. Arduino only classifies after
+// Node sends START over USB serial and the player presses the shield button.
 bool web_game_active = false;
 bool waiting_for_release = false;
 
@@ -58,6 +60,8 @@ static uint8_t tensor_arena[kTensorArenaSize];
 void initializeShield();
 bool readShieldButton();
 
+// Choice names are lowercase because these strings are part of the serial
+// protocol consumed by the Node server: CHOICE:rock, CHOICE:paper, etc.
 const char* ChoiceName(RpsChoice choice) {
   switch (choice) {
     case kChoiceRock:
@@ -71,6 +75,8 @@ const char* ChoiceName(RpsChoice choice) {
   }
 }
 
+// The model output is an int8 softmax tensor. For a turn-based game we only
+// need the argmax class, so comparing raw scores is enough.
 RpsChoice HighestScoringChoice(int8_t rock_score, int8_t paper_score,
                                int8_t scissors_score) {
   if (rock_score > paper_score && rock_score > scissors_score) {
@@ -88,6 +94,8 @@ bool UserBeatsArduino(RpsChoice user_choice, RpsChoice arduino_choice) {
          (user_choice == kChoiceScissors && arduino_choice == kChoicePaper);
 }
 
+// Node writes simple newline-delimited commands over USB serial. START enables
+// button-triggered inference; STOP leaves the detector idle.
 void HandleSerialCommands() {
   if (!Serial.available()) {
     return;
@@ -117,6 +125,8 @@ void setup() {
 
   initializeShield();
 
+  // TFLite Micro uses statically allocated objects because the Arduino has a
+  // small, predictable memory budget and no filesystem for loading the model.
   static tflite::MicroErrorReporter micro_error_reporter;
   error_reporter = &micro_error_reporter;
 
@@ -179,6 +189,8 @@ void setup() {
 void loop() {
   HandleSerialCommands();
 
+  // The loop stays lightweight until the web app has started a game and the
+  // player presses the physical capture button.
   if (!web_game_active || !readShieldButton()) {
     return;
   }
@@ -206,6 +218,9 @@ void loop() {
 
   RpsChoice user_choice =
       HighestScoringChoice(rock_score, paper_score, scissors_score);
+
+  // Send only the detected choice. The Node server owns scoring, round state,
+  // and web UI updates.
   Serial.print("CHOICE:");
   Serial.println(ChoiceName(user_choice));
 }

@@ -17,7 +17,8 @@
 #include "Arduino.h"
 #include <TinyMLShield.h>
 
-// Get an image from the camera module
+// Capture one camera frame, publish a preview to the web app, and fill the
+// TensorFlow input tensor with the same downsampled grayscale image.
 TfLiteStatus GetImage(tflite::ErrorReporter* error_reporter, int image_width,
                       int image_height, int channels, int8_t* image_data) {
 
@@ -49,13 +50,15 @@ TfLiteStatus GetImage(tflite::ErrorReporter* error_reporter, int image_width,
   //   }
   // }
 
-  // Send image to serial
+  // Stream a plain-text PGM preview between markers. Node buffers these lines
+  // and forwards the image to the browser over Socket.IO.
   Serial.println("IMAGE_START");
   Serial.println("P2");
   Serial.println("64 64");
   Serial.println("255");
 
-  // Send image data to web-app via serial portx
+  // Reuse the same 176x144 -> 64x64 mapping that feeds the model so the UI
+  // preview matches what the classifier actually saw.
   for (int y = 0; y < 64; y++) {
     for (int x = 0; x < 64; x++) {
       int src_x = x * 176 / 64;
@@ -72,10 +75,11 @@ TfLiteStatus GetImage(tflite::ErrorReporter* error_reporter, int image_width,
 
   Serial.println("IMAGE_END");
 
-  // Fill TensorFlow model input
+  // Fill the quantized int8 model input. The trained model expects 64x64
+  // grayscale values shifted from unsigned [0,255] into signed [-128,127].
   index = 0;
 
-  //Downsample to keep FOV
+  // Downsample instead of cropping so the camera keeps the full hand in view.
   for (int y = 0; y < 64; y++) {
     for (int x = 0; x < 64; x++) {
 

@@ -10,6 +10,8 @@ const labels = {
   scissors: "Scissors",
 };
 
+// Small client-side state for UI timing. The actual game score and round
+// winner live on the Node server so Arduino serial events can update them.
 const state = {
   countdownTimer: null,
   nextRoundTimer: null,
@@ -34,7 +36,9 @@ const elements = {
   userChoiceLabel: document.querySelector("#userChoiceLabel"),
 };
 
-// Socket.IO image handler (server -> clients)
+// The Arduino sends the captured grayscale frame over serial. The server
+// rebroadcasts it with Socket.IO so the browser can preview the image that was
+// just classified.
 if (typeof io !== "undefined") {
   try {
     const socket = io();
@@ -48,6 +52,7 @@ if (typeof io !== "undefined") {
   }
 }
 
+// Thin wrapper around the Node API routes used by the game controls.
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -62,6 +67,7 @@ async function api(path, options = {}) {
   return payload;
 }
 
+// Shows either the hidden state or a revealed rock/paper/scissors choice card.
 function choiceMarkup(choice) {
   const icon = choice ? icons[choice] : "?";
   const label = choice ? labels[choice] : "Hidden";
@@ -71,6 +77,8 @@ function choiceMarkup(choice) {
   `;
 }
 
+// Prevents overlapping automatic round transitions when a hardware result and
+// polling update arrive close together.
 function clearNextRoundTimer() {
   if (state.nextRoundTimer) {
     clearTimeout(state.nextRoundTimer);
@@ -78,6 +86,7 @@ function clearNextRoundTimer() {
   }
 }
 
+// Renders compact round progress without revealing future Arduino/web choices.
 function renderRoundDots(game) {
   const currentRound = game.gameOver
     ? game.roundIndex
@@ -101,6 +110,8 @@ function renderRoundDots(game) {
   `;
 }
 
+// Arduino image previews are sent as ASCII PGM text because it is easy to print
+// over serial and easy for the browser to reconstruct into pixels.
 function parsePGM(pgmText) {
   const lines = pgmText
     .split(/\r?\n/)
@@ -141,14 +152,14 @@ function renderPGMToCanvas(canvas, pgm) {
     return;
   }
 
-  // Set the canvas rendering resolution
+  // Keep the backing canvas at the real image resolution, then scale it with
+  // CSS so the low-resolution camera frame stays sharp instead of blurred.
   canvas.width = pgm.width;
   canvas.height = pgm.height;
 
-  // Use CSS to visually scale the canvas up (e.g. 3x larger) while keeping pixel art sharp
   canvas.style.width = pgm.width * 3 + "px";
   canvas.style.height = pgm.height * 3 + "px";
-  canvas.style.imageRendering = "pixelated"; // Prevents the image from getting blurry when scaled
+  canvas.style.imageRendering = "pixelated";
 
   const imageData = context.createImageData(pgm.width, pgm.height);
   const data = imageData.data;
@@ -167,6 +178,7 @@ function renderPGMToCanvas(canvas, pgm) {
   context.putImageData(imageData, 0, 0);
 }
 
+// Converts the latest serial image into the preview canvas shown in the UI.
 function displayPGM(pgmText) {
   const pgm = parsePGM(pgmText);
   if (!pgm) {
@@ -182,6 +194,8 @@ function displayPGM(pgmText) {
   renderPGMToCanvas(elements.captureCanvas, pgm);
 }
 
+// Central UI renderer. It reflects the server's game state but leaves timing
+// details like countdowns and short result pauses to the browser.
 function render(game) {
   elements.connectionStatus.textContent = game.connected
     ? "Arduino connected"
@@ -218,6 +232,8 @@ function render(game) {
   elements.playButton.disabled = true;
 }
 
+// Polling compares a compact signature of the last result so the page can react
+// only when Node receives a new Arduino serial message.
 function resultKeyFor(game) {
   return [
     game.roundIndex,
@@ -232,6 +248,8 @@ function resultKeyFor(game) {
   ].join("|");
 }
 
+// Starts a round from the user's perspective: prepare server state, hide the
+// app's choice, count down, then wait for the Arduino button/camera result.
 async function runCountdown(game) {
   state.busy = true;
   elements.playButton.disabled = true;
@@ -256,6 +274,7 @@ async function runCountdown(game) {
   elements.prompt.textContent = "Show your hand and press the Arduino button.";
 }
 
+// Starts a fresh game and opens the Arduino serial connection through Node.
 async function startGame() {
   try {
     clearNextRoundTimer();
@@ -270,6 +289,7 @@ async function startGame() {
   }
 }
 
+// Used by both automatic round advancement and the initial Play button.
 async function nextRound() {
   try {
     clearNextRoundTimer();
@@ -286,6 +306,8 @@ async function nextRound() {
   }
 }
 
+// Development fallback for testing without hardware; the real Arduino path
+// reaches the same server logic through USB serial.
 async function sendSimulatedChoice(choice) {
   try {
     clearNextRoundTimer();
@@ -324,6 +346,9 @@ async function sendSimulatedChoice(choice) {
   }
 }
 
+// The browser polls because Arduino input arrives at Node independently of
+// browser clicks. When a new serial result appears, the UI reveals choices,
+// updates score, and schedules the next countdown.
 async function pollState() {
   if (state.busy) {
     return;

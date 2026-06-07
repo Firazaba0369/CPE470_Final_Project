@@ -23,7 +23,8 @@ limitations under the License.
 
 #include "Arduino.h"
 
-// Update the RGB LED for the latest detected choice.
+// Keep visual feedback local to the board. Serial output is reserved for the
+// Node protocol, so this responder only changes LEDs after each classification.
 void RespondToDetection(tflite::ErrorReporter* error_reporter,
                         int8_t rock_score,int8_t paper_score, int8_t scissors_score) {
   (void)error_reporter;
@@ -40,19 +41,17 @@ void RespondToDetection(tflite::ErrorReporter* error_reporter,
   // Note: The RGB LEDs on the Arduino Nano 33 BLE
   // Sense are on when the pin is LOW, off when HIGH.
 
-  // Red when rock is detected.
+  // The RGB LED is active-low on the Nano 33 BLE Sense.
   if (rock_score > paper_score && rock_score > scissors_score) {
     digitalWrite(LEDR, LOW);  // ON
     digitalWrite(LEDG, HIGH);   // OFF
     digitalWrite(LEDB, HIGH);  // OFF
   } 
-  // Green when paper is detected.
   else if (paper_score > rock_score && paper_score > scissors_score){
     digitalWrite(LEDR, HIGH);  // OFF
     digitalWrite(LEDG, LOW);   // ON (BLUE AND GREEN FLIPPED FOR SOME REASON)
     digitalWrite(LEDB, HIGH);  // OFF
   }
-  // Blue when scissors is detected.
   else {
     digitalWrite(LEDR, HIGH);  // OFF
     digitalWrite(LEDG, HIGH);   // OFF
